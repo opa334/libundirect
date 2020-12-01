@@ -1,0 +1,10 @@
+Package: com.opa334.libundirect
+Name: libundirect
+Architecture: iphoneos-arm
+Description: Patchfinder and rebinder for objc_direct methods
+Maintainer: opa334
+Author: opa334
+Section: System
+Tag: role::developer
+Version: 0.9
+Installed-Size: 264
