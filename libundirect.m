@@ -6,11 +6,11 @@
 
 #define libundirect_EXPORT __attribute__((visibility ("default")))
 
-NSString* _libundirect_getSelectorString(BOOL classMethod, NSString* className, SEL selector)
+NSString* _libundirect_getSelectorString(Class _class, SEL selector)
 {
     NSString* prefix;
 
-    if(classMethod)
+    if(class_isMetaClass(_class))
     {
         prefix = @"+";
     }
@@ -19,7 +19,7 @@ NSString* _libundirect_getSelectorString(BOOL classMethod, NSString* className, 
         prefix = @"-";
     }
 
-    return [NSString stringWithFormat:@"%@[%@ %@]", prefix, className, NSStringFromSelector(selector)];
+    return [NSString stringWithFormat:@"%@[%@ %@]", prefix, NSStringFromClass(_class), NSStringFromSelector(selector)];
 }
 
 //only on ios
@@ -35,7 +35,7 @@ libundirect_EXPORT void libundirect_MSHookMessageEx(Class _class, SEL message, I
     {
         if(message)
         {
-            NSString* selectorString = _libundirect_getSelectorString(class_isMetaClass(_class), NSStringFromClass(_class), message);
+            NSString* selectorString = _libundirect_getSelectorString(_class, message);
 
             NSValue* symbol = [undirectedSelectorsAndValues objectForKey:selectorString];
             if(symbol)
@@ -66,9 +66,9 @@ void _libundirect_addToFailedSelectors(NSString* selectorString)
     [failedSelectors addObject:selectorString];
 }
 
-libundirect_EXPORT void libundirect_rebind(BOOL classMethod, void* directPtr, NSString* className, SEL selector, const char* format)
+libundirect_EXPORT void libundirect_rebind(void* directPtr, Class _class, SEL selector, const char* format)
 {
-    NSString* selectorString = _libundirect_getSelectorString(classMethod, className, selector);
+    NSString* selectorString = _libundirect_getSelectorString(_class, selector);
 
     NSLog(@"[libundirect_rebind] about to apply %@ with %s to %p", selectorString, format, directPtr);
 
@@ -88,36 +88,8 @@ libundirect_EXPORT void libundirect_rebind(BOOL classMethod, void* directPtr, NS
         return;
     }
 
-    Class classToUse = NSClassFromString(className);
-
-    if(!classToUse)
-    {
-        NSLog(@"[libundirect_rebind] failed, class %@ not found", className);
-        _libundirect_addToFailedSelectors(selectorString);
-        return;
-    }
-
-    // use metaclass if class method and check whether method already exists
-    if(classMethod)
-    {
-        classToUse = object_getClass(classToUse);
-        if([classToUse respondsToSelector:selector])
-        {
-            NSLog(@"[libundirect_rebind] failed, method already exists, likely already undirected");
-            return;
-        }
-    }
-    else
-    {
-        if([classToUse instancesRespondToSelector:selector])
-        {
-            NSLog(@"[libundirect_rebind] failed, method already exists, likely already undirected");
-            return;
-        }
-    }
-
     class_addMethod(
-        classToUse, 
+        _class, 
         selector,
         (IMP)directPtr, 
         format
@@ -262,7 +234,7 @@ libundirect_EXPORT NSArray* libundirect_failedSelectors()
 
 // Non 64 bit devices are so ancient that they probably don't need to use this library
 
-libundirect_EXPORT void libundirect_rebind(BOOL classMethod, void* directPtr, NSString* className, SEL selector, const char* format)
+libundirect_EXPORT void libundirect_rebind(void* directPtr, Class _class, SEL selector, const char* format)
 {
 
 }

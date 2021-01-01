@@ -8,7 +8,7 @@ extern "C" {
 void libundirect_MSHookMessageEx(Class _class, SEL message, IMP hook, IMP *old);
 
 // readds a direct method back to the class, requiring the pointer to it
-void libundirect_rebind(BOOL classMethod, void* directPtr, NSString* className, SEL selector, const char* format);
+void libundirect_rebind(void* directPtr, Class _class, SEL selector, const char* format);
 
 // find a direct method by searching for unique memory bytes
 void* libundirect_find(NSString* imageName, unsigned char* bytesToSearch, size_t byteCount, unsigned char startByte);
