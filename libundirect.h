@@ -14,8 +14,7 @@
 extern "C" {
 #endif
 
-// wrapper around to MSHookMessageEx to support hooking applied methods, accessed by theos directly
-// if using %config(MobileSubstrate_libundirect)
+// wrapper around to MSHookMessageEx to support hooking applied methods, accessed by theos directly if libundirect_hookoverwrite.h is included
 void libundirect_MSHookMessageEx(Class _class, SEL message, IMP hook, IMP *old);
 
 // readds a direct method back to the class, requiring the pointer to it
