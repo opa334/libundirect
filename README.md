@@ -14,6 +14,13 @@ Examples:
 
 ![example 2](doc/libundirect_doc2.png?raw=true)
 
+## Installation
+Run [install.sh](install.sh), then you can import it using `#import <libundirect.h>`.
+Also make sure to add it to your makefile:
+```
+<YOUR_TWEAK>_LIBRARIES = undirect
+```
+
 ## Patchfinder
 
 For the patchfinding process, it is important that you know the address of the unexported C function for at least one binary that you have, and that you have at least one other version of the binary where you don't know the address. This is important so you can make sure that the bytes stay the same accross different versions (as references to pointers usually change whenever the source code changes).
