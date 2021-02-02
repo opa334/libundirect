@@ -1,3 +1,5 @@
+export PREFIX = $(THEOS)/toolchain/Xcode11.xctoolchain/usr/bin/
+
 TARGET := iphone:clang:13.0:8.0
 ARCHS := armv7 armv7s arm64 arm64e
 
