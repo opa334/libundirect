@@ -15,6 +15,7 @@
 #import <objc/runtime.h>
 #import <dlfcn.h>
 #import <mach/mach.h>
+#import "pac.h"
 
 #define libundirect_EXPORT __attribute__((visibility ("default")))
 
@@ -103,7 +104,7 @@ libundirect_EXPORT void libundirect_rebind(void* directPtr, Class _class, SEL se
     class_addMethod(
         _class, 
         selector,
-        (IMP)directPtr, 
+        (IMP)make_sym_callable(directPtr), 
         format
     );
 
