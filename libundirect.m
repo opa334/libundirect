@@ -53,7 +53,7 @@ libundirect_EXPORT void libundirect_MSHookMessageEx(Class _class, SEL message, I
             NSValue* symbol = [undirectedSelectorsAndValues objectForKey:selectorString];
             if(symbol)
             {
-                NSLog(@"[libundirect_MSHookMessageEx] received hook for %@ which is a direct method, redirecting to MSHookFunction...", selectorString);
+                HBLogDebug(@"received hook for %@ which is a direct method, redirecting to MSHookFunction...", selectorString);
                 void* symbolPtr = [symbol pointerValue];
                 MSHookFunction(symbolPtr, (void*)hook, (void**)old);
 
@@ -69,6 +69,23 @@ libundirect_EXPORT void libundirect_MSHookMessageEx(Class _class, SEL message, I
 
 #ifdef __LP64__
 
+int _libundirect_dyldIndexForImageName(NSString* imageName)
+{
+    for (uint32_t i = 0; i < _dyld_image_count(); i++)
+    {
+        const char *pathC = _dyld_get_image_name(i);
+        NSString* path = [NSString stringWithUTF8String:pathC];
+        NSString* cImageName = [path lastPathComponent];
+
+        if([cImageName isEqualToString:imageName])
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 void _libundirect_addToFailedSelectors(NSString* selectorString)
 {
     static dispatch_once_t onceToken;
@@ -83,7 +100,7 @@ libundirect_EXPORT void libundirect_rebind(void* directPtr, Class _class, SEL se
 {
     NSString* selectorString = _libundirect_getSelectorString(_class, selector);
 
-    NSLog(@"[libundirect_rebind] about to apply %@ with %s to %p", selectorString, format, directPtr);
+    HBLogDebug(@"about to apply %@ with %s to %p", selectorString, format, directPtr);
 
     static dispatch_once_t onceToken;
     dispatch_once (&onceToken, ^{
@@ -96,7 +113,7 @@ libundirect_EXPORT void libundirect_rebind(void* directPtr, Class _class, SEL se
 
     if(rc == 0)
     {
-        NSLog(@"[libundirect_rebind] failed, not a valid function pointer");
+        HBLogDebug(@"failed, not a valid function pointer");
         _libundirect_addToFailedSelectors(selectorString);
         return;
     }
@@ -111,7 +128,7 @@ libundirect_EXPORT void libundirect_rebind(void* directPtr, Class _class, SEL se
     NSValue* ptrValue = [NSValue valueWithPointer:directPtr];
     [undirectedSelectorsAndValues setObject:ptrValue forKey:selectorString];
 
-    NSLog(@"[libundirect_rebind] %@ applied", selectorString);
+    HBLogDebug(@"%@ applied", selectorString);
 }
 
 void* _libundirect_find_in_region(vm_address_t startAddr, vm_offset_t regionLength, unsigned char* bytesToSearch, size_t byteCount)
@@ -132,7 +149,7 @@ void* _libundirect_find_in_region(vm_address_t startAddr, vm_offset_t regionLeng
 
         if(foundPtr == NULL)
         {
-            NSLog(@"[_libundirect_find_in_region] foundPtr == NULL return");
+            HBLogDebug(@"foundPtr == NULL return");
             break;
         }
 
@@ -146,7 +163,7 @@ void* _libundirect_find_in_region(vm_address_t startAddr, vm_offset_t regionLeng
 
             if(memcmpRes == 0)
             {
-                NSLog(@"[_libundirect_find_in_region] foundPtr = %p", foundPtr);
+                HBLogDebug(@"foundPtr = %p", foundPtr);
                 return foundPtr;
             }
         }
@@ -183,18 +200,14 @@ void* _libundirect_seek_back(vm_address_t startAddr, unsigned char toByte, unsig
 
 libundirect_EXPORT void* libundirect_find(NSString* imageName, unsigned char* bytesToSearch, size_t byteCount, unsigned char startByte)
 {
-    intptr_t baseAddr;
-    struct mach_header_64* header;
-    for (uint32_t i = 0; i < _dyld_image_count(); i++)
+    int imageIndex = _libundirect_dyldIndexForImageName(imageName);
+    if(imageIndex == -1)
     {
-        const char *name = _dyld_get_image_name(i);
-        NSString *path = [NSString stringWithFormat:@"%s", name];
-        if([path containsString:imageName])
-        {
-            baseAddr = _dyld_get_image_vmaddr_slide(i);
-            header = (struct mach_header_64*)_dyld_get_image_header(i);
-        }
+        return NULL;
     }
+
+    intptr_t baseAddr = _dyld_get_image_vmaddr_slide(imageIndex);
+    struct mach_header_64* header = (struct mach_header_64*)_dyld_get_image_header(imageIndex);
 
     const struct segment_command_64* cmd;
 
@@ -236,6 +249,40 @@ libundirect_EXPORT void* libundirect_find(NSString* imageName, unsigned char* by
 	}
 
     return NULL;
+}
+
+libundirect_EXPORT void* libundirect_dsc_find(NSString* imageName, Class _class, SEL selector)
+{
+    NSString* symbol = _libundirect_getSelectorString(_class, selector);
+    NSString* imagePath = nil;
+
+    HBLogDebug(@"searching dyldSharedCache for symbol: %@", symbol);
+
+    int imageIndex = -1;
+    if(imageName)
+    {
+        imageIndex = _libundirect_dyldIndexForImageName(imageName);
+    }
+
+    if(imageIndex != -1)
+    {
+        const char *name = _dyld_get_image_name(imageIndex);
+        imagePath = [NSString stringWithUTF8String:name];
+    }
+
+    MSImageRef image = NULL;
+    if(imagePath)
+    {
+        image = MSGetImageByName(imagePath.UTF8String);
+    }
+
+    return MSFindSymbol(image, symbol.UTF8String);
+}
+
+libundirect_EXPORT void libundirect_dsc_rebind(NSString* imageName, Class _class, SEL selector, const char* format)
+{
+    void* ptr = libundirect_dsc_find(imageName, _class, selector);
+    libundirect_rebind(ptr, _class, selector, format);
 }
 
 libundirect_EXPORT NSArray* libundirect_failedSelectors()

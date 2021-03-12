@@ -6,6 +6,8 @@ This makes it completely impossible to call the method from inside a dylib thats
 
 Apple has started using objc_direct in system applications, daemons and frameworks starting in iOS 14.0. Some examples for affected binaries: MobileSafari, SafariServices.framework, CoreFoundation.framework...
 
+The dyld shared cache retains all symbols of direct methods (mainly for symbolicating crash logs), this makes it extremely easy to rebind direct methods of every binary that's inside it (Frameworks, Control Center modules, etc...), instructions are [documented below](#dyld-shared-cache).
+
 Before you can utilize libundirect, you will have to find the unexported function you're looking for via reverse engineering, this process won't be covered here. I have personally had success by searching for xrefs in an earlier binary without objc_direct, finding the methods that call your method in the new binary, hoping they are not also affected by objc_direct and finding the call to your method which will be a call to a sub_* C function now.
 
 Examples:
@@ -15,11 +17,12 @@ Examples:
 ![example 2](doc/libundirect_doc2.png?raw=true)
 
 ## Installation
-Run [install.sh](install.sh), then you can import it using `#import <libundirect.h>`.
+Run [install_to_theos.sh](install_to_theos.sh), then you can import it using `#import <libundirect/libundirect.h>`.
 Also make sure to add it to your makefile:
 ```
 <YOUR_TWEAK>_LIBRARIES = undirect
 ```
+If you don't want to link against it, you can also use the dynamic header using `#import <libundirect/libundirect_dynamic.h>` and avoid adding it to the Makefile.
 
 ## Patchfinder
 
@@ -38,6 +41,13 @@ Once you have a unique byte sequence that stays the same between versions, the f
 ## Rebinding methods
 
 To provide backwards compatibility with older binaries, you can rebind the direct methods to the class using the [libundirect_rebind](libundirect.h#L22) function. Last argument is the [type encoding](https://nshipster.com/type-encodings/) of the method.
+
+## Dyld Shared Cache
+
+Finding and rebinding direct methods that are inside the dyld shared cache requires just the name of the method and the class it is on. [libundirect_dsc_find](libundirect.h#L27) and [libundirect_dsc_rebind](libundirect.h#L30) are available for this.
+
+Example (Rebinds the direct method `-(void)handleSourceMessage:(id)arg1 replyHandler:(id)arg2;` of the `CFPrefsDaemon` class):
+`libundirect_dsc_rebind(@"CoreFoundation", NSClassFromString(@"CFPrefsDaemon"), @selector(handleSourceMessage:replyHandler:), "v@:@@");`
 
 ## Hooking direct methods
 
