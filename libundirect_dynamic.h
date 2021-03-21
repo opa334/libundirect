@@ -27,7 +27,7 @@ static void libundirect_MSHookMessageEx(Class _class, SEL message, IMP hook, IMP
 	if(!impl_libundirect_MSHookMessageEx)
 	{
 		void* handle = dlopen("/usr/lib/libundirect.dylib", RTLD_LAZY);
-		impl_libundirect_MSHookMessageEx = dlsym(handle, "libundirect_MSHookMessageEx");
+		impl_libundirect_MSHookMessageEx = (void (*)(Class, SEL, IMP, IMP *))dlsym(handle, "libundirect_MSHookMessageEx");
 	}
 	if(impl_libundirect_MSHookMessageEx)
 	{
@@ -46,7 +46,7 @@ static void libundirect_rebind(void* directPtr, Class _class, SEL selector, cons
 	if(!impl_libundirect_rebind)
 	{
 		void* handle = dlopen("/usr/lib/libundirect.dylib", RTLD_LAZY);
-		impl_libundirect_rebind = dlsym(handle, "libundirect_rebind");
+		impl_libundirect_rebind = (void (*)(void*, Class, SEL, const char*))dlsym(handle, "libundirect_rebind");
 	}
 	if(impl_libundirect_rebind)
 	{
@@ -61,7 +61,7 @@ static void* libundirect_find(NSString* imageName, unsigned char* bytesToSearch,
 	if(!impl_libundirect_find)
 	{
 		void* handle = dlopen("/usr/lib/libundirect.dylib", RTLD_LAZY);
-		impl_libundirect_find = dlsym(handle, "libundirect_find");
+		impl_libundirect_find = (void* (*)(NSString*, unsigned char*, size_t, unsigned char))dlsym(handle, "libundirect_find");
 	}
 	if(impl_libundirect_find)
 	{
@@ -77,7 +77,7 @@ static void* libundirect_dsc_find(NSString* imageName, Class _class, SEL selecto
 	if(!impl_libundirect_dsc_find)
 	{
 		void* handle = dlopen("/usr/lib/libundirect.dylib", RTLD_LAZY);
-		impl_libundirect_dsc_find = dlsym(handle, "libundirect_dsc_find");
+		impl_libundirect_dsc_find = (void* (*)(NSString*, Class, SEL))dlsym(handle, "libundirect_dsc_find");
 	}
 	if(impl_libundirect_dsc_find)
 	{
@@ -93,7 +93,7 @@ static void libundirect_dsc_rebind(NSString* imageName, Class _class, SEL select
 	if(!impl_libundirect_dsc_rebind)
 	{
 		void* handle = dlopen("/usr/lib/libundirect.dylib", RTLD_LAZY);
-		impl_libundirect_dsc_rebind = dlsym(handle, "libundirect_dsc_rebind");
+		impl_libundirect_dsc_rebind = (void (*)(NSString*, Class, SEL, const char*))dlsym(handle, "libundirect_dsc_rebind");
 	}
 	if(impl_libundirect_dsc_rebind)
 	{
@@ -108,13 +108,13 @@ static NSArray* libundirect_failedSelectors()
 	if(!impl_libundirect_failedSelectors)
 	{
 		void* handle = dlopen("/usr/lib/libundirect.dylib", RTLD_LAZY);
-		impl_libundirect_failedSelectors = dlsym(handle, "libundirect_failedSelectors");
+		impl_libundirect_failedSelectors = (NSArray* (*)(void))dlsym(handle, "libundirect_failedSelectors");
 	}
 	if(impl_libundirect_failedSelectors)
 	{
 		return impl_libundirect_failedSelectors();
 	}
-	return nil;
+	return (NSArray*)nil;
 }
 
 #ifdef __cplusplus
