@@ -17,8 +17,14 @@
 extern "C" {
 #endif
 
+
 // dynamic header for when you don't want to link against libundirect
 // for documentation, check out the non-dynamic header
+
+typedef enum 
+{ 
+    OPTION_DO_NOT_SEEK_BACK = 1 << 0
+} libundirect_find_options_t;
 
 __attribute__((unused))
 static void libundirect_MSHookMessageEx(Class _class, SEL message, IMP hook, IMP *old)
@@ -52,6 +58,38 @@ static void libundirect_rebind(void* directPtr, Class _class, SEL selector, cons
 	{
 		impl_libundirect_rebind(directPtr, _class, selector, format);
 	}
+}
+
+__attribute__((unused))
+static void* libundirect_seek_back(void* startPtr, unsigned char toByte, unsigned int maxSearch)
+{
+	static void* (*impl_libundirect_seek_back)(void*, unsigned char, unsigned int);
+	if(!impl_libundirect_seek_back)
+	{
+		void* handle = dlopen("/usr/lib/libundirect.dylib", RTLD_LAZY);
+		impl_libundirect_seek_back = (void* (*)(void*, unsigned char, unsigned int))dlsym(handle, "libundirect_seek_back");
+	}
+	if(impl_libundirect_seek_back)
+	{
+		return impl_libundirect_seek_back(startPtr, toByte, maxSearch);
+	}
+	return NULL;
+}
+
+__attribute__((unused))
+static void* libundirect_find_with_options(NSString* imageName, unsigned char* bytesToSearch, size_t byteCount, unsigned char startByte, unsigned int seekbackMax, libundirect_find_options_t options)
+{
+	static void* (*impl_libundirect_find_with_options)(NSString*, unsigned char*, size_t, unsigned char, unsigned int, libundirect_find_options_t);
+	if(!impl_libundirect_find_with_options)
+	{
+		void* handle = dlopen("/usr/lib/libundirect.dylib", RTLD_LAZY);
+		impl_libundirect_find_with_options = (void* (*)(NSString*, unsigned char*, size_t, unsigned char, unsigned int, libundirect_find_options_t))dlsym(handle, "libundirect_find_with_options");
+	}
+	if(impl_libundirect_find_with_options)
+	{
+		return impl_libundirect_find_with_options(imageName, bytesToSearch, byteCount, startByte, seekbackMax, options);
+	}
+	return NULL;
 }
 
 __attribute__((unused))

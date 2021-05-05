@@ -178,8 +178,9 @@ void* _libundirect_find_in_region(vm_address_t startAddr, vm_offset_t regionLeng
     return NULL;
 }
 
-void* _libundirect_seek_back(vm_address_t startAddr, unsigned char toByte, unsigned int maxSearch)
+libundirect_EXPORT void* libundirect_seek_back(void* startPtr, unsigned char toByte, unsigned int maxSearch)
 {
+    vm_address_t startAddr = (vm_address_t)startPtr;
     vm_address_t curAddr = startAddr;
 
     while((startAddr - curAddr) < maxSearch)
@@ -198,7 +199,7 @@ void* _libundirect_seek_back(vm_address_t startAddr, unsigned char toByte, unsig
     return NULL;
 }
 
-libundirect_EXPORT void* libundirect_find(NSString* imageName, unsigned char* bytesToSearch, size_t byteCount, unsigned char startByte)
+libundirect_EXPORT void* libundirect_find_with_options(NSString* imageName, unsigned char* bytesToSearch, size_t byteCount, unsigned char startByte, unsigned int seekbackMax, libundirect_find_options_t options)
 {
     int imageIndex = _libundirect_dyldIndexForImageName(imageName);
     if(imageIndex == -1)
@@ -227,11 +228,16 @@ libundirect_EXPORT void* libundirect_find(NSString* imageName, unsigned char* by
 
 		void* result = _libundirect_find_in_region(cmd->vmaddr + baseAddr, cmd->vmsize, bytesToSearch, byteCount);
 
+        if(options & OPTION_DO_NOT_SEEK_BACK)
+        {
+            return result;
+        }
+
         if(result != NULL)
         {
             if(startByte)
             {
-                void* backResult = _libundirect_seek_back((vm_address_t)result, startByte, 64);
+                void* backResult = libundirect_seek_back(result, startByte, seekbackMax);
                 if(backResult)
                 {
                     return backResult;
@@ -249,6 +255,11 @@ libundirect_EXPORT void* libundirect_find(NSString* imageName, unsigned char* by
 	}
 
     return NULL;
+}
+
+libundirect_EXPORT void* libundirect_find(NSString* imageName, unsigned char* bytesToSearch, size_t byteCount, unsigned char startByte)
+{
+    return libundirect_find_with_options(imageName, bytesToSearch, byteCount, startByte, 64, 0);
 }
 
 libundirect_EXPORT void* libundirect_dsc_find(NSString* imageName, Class _class, SEL selector)
