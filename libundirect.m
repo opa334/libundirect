@@ -107,6 +107,13 @@ libundirect_EXPORT void libundirect_rebind(void* directPtr, Class _class, SEL se
         undirectedSelectorsAndValues = [NSMutableDictionary new];
     });
 
+    if([undirectedSelectorsAndValues objectForKey:selectorString])
+    {
+        // check if the selector has already been undirected
+        // in that case, just return as it may incorrectly get added to failed selectors otherwise
+        return;
+    }
+
     // check whether the direct pointer is actually a valid function pointer
     Dl_info info;
     int rc = dladdr(directPtr, &info);
