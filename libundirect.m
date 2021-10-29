@@ -16,6 +16,7 @@
 #import <dlfcn.h>
 #import <mach/mach.h>
 #import "pac.h"
+#import "HBLogWeak.h"
 
 #define libundirect_EXPORT __attribute__((visibility ("default")))
 
@@ -53,7 +54,7 @@ libundirect_EXPORT void libundirect_MSHookMessageEx(Class _class, SEL message, I
             NSValue* symbol = [undirectedSelectorsAndValues objectForKey:selectorString];
             if(symbol)
             {
-                HBLogDebug(@"received hook for %@ which is a direct method, redirecting to MSHookFunction...", selectorString);
+                HBLogDebugWeak(@"received hook for %@ which is a direct method, redirecting to MSHookFunction...", selectorString);
                 void* symbolPtr = [symbol pointerValue];
                 MSHookFunction(symbolPtr, (void*)hook, (void**)old);
 
@@ -100,7 +101,7 @@ libundirect_EXPORT void libundirect_rebind(void* directPtr, Class _class, SEL se
 {
     NSString* selectorString = _libundirect_getSelectorString(_class, selector);
 
-    HBLogDebug(@"about to apply %@ with %s to %p", selectorString, format, directPtr);
+    HBLogDebugWeak(@"about to apply %@ with %s to %p", selectorString, format, directPtr);
 
     static dispatch_once_t onceToken;
     dispatch_once (&onceToken, ^{
@@ -120,7 +121,7 @@ libundirect_EXPORT void libundirect_rebind(void* directPtr, Class _class, SEL se
 
     if(rc == 0)
     {
-        HBLogDebug(@"failed, not a valid function pointer");
+        HBLogDebugWeak(@"failed, not a valid function pointer");
         _libundirect_addToFailedSelectors(selectorString);
         return;
     }
@@ -135,18 +136,50 @@ libundirect_EXPORT void libundirect_rebind(void* directPtr, Class _class, SEL se
     NSValue* ptrValue = [NSValue valueWithPointer:directPtr];
     [undirectedSelectorsAndValues setObject:ptrValue forKey:selectorString];
 
-    HBLogDebug(@"%@ applied", selectorString);
+    HBLogDebugWeak(@"%@ applied", selectorString);
 }
 
-void* _libundirect_find_in_region(vm_address_t startAddr, vm_offset_t regionLength, unsigned char* bytesToSearch, size_t byteCount)
+int memcmp_masked(const void *str1, const void *str2, unsigned char* mask, size_t n)
+{
+    const unsigned char* p = (const unsigned char*)str1;
+    const unsigned char* q = (const unsigned char*)str2;
+
+    if(p == q) return 0;
+
+    for(int i = 0; i < n; i++)
+    {
+        unsigned char cMask = mask[i];
+        if((p[i] & cMask) != (q[i] & cMask))
+        {
+            // we do not care about 1 / -1
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+void* _libundirect_find_in_region(vm_address_t startAddr, vm_offset_t regionLength, unsigned char* bytesToSearch, unsigned char* byteMask, size_t byteCount)
 {
     if(byteCount < 1)
     {
         return NULL;
     }
 
-    unsigned char firstByte = bytesToSearch[0];
+    unsigned int firstByteIndex = 0;
+    if(byteMask != NULL)
+    {
+        for(size_t i = 0; i < byteCount; i++)
+        {
+            if(byteMask[i] == 0xFF)
+            {
+                firstByteIndex = i;
+                break;
+            }
+        }
+    }
 
+    unsigned char firstByte = bytesToSearch[firstByteIndex];
     vm_address_t curAddr = startAddr;
 
     while(curAddr < startAddr + regionLength)
@@ -156,21 +189,32 @@ void* _libundirect_find_in_region(vm_address_t startAddr, vm_offset_t regionLeng
 
         if(foundPtr == NULL)
         {
-            HBLogDebug(@"foundPtr == NULL return");
+            HBLogDebugWeak(@"foundPtr == NULL return");
             break;
         }
-
+        
         vm_address_t foundAddr = (vm_address_t)foundPtr;
+
+        // correct foundPtr in respect of firstByteIndex
+        foundPtr = (void*)((intptr_t)foundPtr - firstByteIndex);        
 
         size_t remainingBytes = regionLength - (foundAddr - startAddr);
 
         if(remainingBytes >= byteCount)
         {
-            int memcmpRes = memcmp(foundPtr, bytesToSearch, byteCount);
-
-            if(memcmpRes == 0)
+            int memcmp_res;
+            if(byteMask != NULL)
             {
-                HBLogDebug(@"foundPtr = %p", foundPtr);
+                memcmp_res = memcmp_masked(foundPtr, bytesToSearch, byteMask, byteCount);
+            }
+            else
+            {
+                memcmp_res = memcmp(foundPtr, bytesToSearch, byteCount);
+            }
+
+            if(memcmp_res == 0)
+            {
+                HBLogDebugWeak(@"foundPtr = %p", foundPtr);
                 return foundPtr;
             }
         }
@@ -206,7 +250,7 @@ libundirect_EXPORT void* libundirect_seek_back(void* startPtr, unsigned char toB
     return NULL;
 }
 
-libundirect_EXPORT void* libundirect_find_with_options(NSString* imageName, unsigned char* bytesToSearch, size_t byteCount, unsigned char startByte, unsigned int seekbackMax, libundirect_find_options_t options)
+libundirect_EXPORT void* libundirect_find_with_options_and_mask(NSString* imageName, unsigned char* bytesToSearch, unsigned char* byteMask, size_t byteCount, unsigned char startByte, unsigned int seekbackMax, libundirect_find_options_t options)
 {
     int imageIndex = _libundirect_dyldIndexForImageName(imageName);
     if(imageIndex == -1)
@@ -233,7 +277,7 @@ libundirect_EXPORT void* libundirect_find_with_options(NSString* imageName, unsi
 			continue;
 		}
 
-		void* result = _libundirect_find_in_region(cmd->vmaddr + baseAddr, cmd->vmsize, bytesToSearch, byteCount);
+		void* result = _libundirect_find_in_region(cmd->vmaddr + baseAddr, cmd->vmsize, bytesToSearch, byteMask, byteCount);
 
         if(options & OPTION_DO_NOT_SEEK_BACK)
         {
@@ -264,6 +308,11 @@ libundirect_EXPORT void* libundirect_find_with_options(NSString* imageName, unsi
     return NULL;
 }
 
+libundirect_EXPORT void* libundirect_find_with_options(NSString* imageName, unsigned char* bytesToSearch, size_t byteCount, unsigned char startByte, unsigned int seekbackMax, libundirect_find_options_t options)
+{
+    return libundirect_find_with_options_and_mask(imageName, bytesToSearch, NULL, byteCount, startByte, seekbackMax, options);
+}
+
 libundirect_EXPORT void* libundirect_find(NSString* imageName, unsigned char* bytesToSearch, size_t byteCount, unsigned char startByte)
 {
     return libundirect_find_with_options(imageName, bytesToSearch, byteCount, startByte, 64, 0);
@@ -274,7 +323,7 @@ libundirect_EXPORT void* libundirect_dsc_find(NSString* imageName, Class _class,
     NSString* symbol = _libundirect_getSelectorString(_class, selector);
     NSString* imagePath = nil;
 
-    HBLogDebug(@"searching dyldSharedCache for symbol: %@", symbol);
+    HBLogDebugWeak(@"searching dyldSharedCache for symbol: %@", symbol);
 
     int imageIndex = -1;
     if(imageName)
