@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Lars Fröder
+// Copyright (c) 2020-2022 Lars Fröder
 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -10,15 +10,20 @@
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
 
-#import "libundirect.h"
 #import <mach-o/dyld.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
 #import <mach/mach.h>
 #import "pac.h"
 #import "HBLogWeak.h"
+#import <Foundation/Foundation.h>
+#import "HookCompat.h"
+#import "libundirect.h"
 
 #define libundirect_EXPORT __attribute__((visibility ("default")))
+
+static BOOL libundirect_batchHookEnabled = NO;
+static NSMutableArray* libundirect_batchedHooks;
 
 NSString* _libundirect_getSelectorString(Class _class, SEL selector)
 {
@@ -45,6 +50,7 @@ NSMutableArray* failedSelectors;
 
 libundirect_EXPORT void libundirect_MSHookMessageEx(Class _class, SEL message, IMP hook, IMP *old)
 {
+    HBLogDebugWeak(@"libundirect_MSHookMessageEx(%@, %@)", NSStringFromClass(_class), NSStringFromSelector(message));
     if(undirectedSelectorsAndValues)
     {
         if(message)
@@ -54,11 +60,24 @@ libundirect_EXPORT void libundirect_MSHookMessageEx(Class _class, SEL message, I
             NSValue* symbol = [undirectedSelectorsAndValues objectForKey:selectorString];
             if(symbol)
             {
-                HBLogDebugWeak(@"received hook for %@ which is a direct method, redirecting to MSHookFunction...", selectorString);
-                void* symbolPtr = [symbol pointerValue];
-                MSHookFunction(symbolPtr, (void*)hook, (void**)old);
+                 void* symbolPtr = [symbol pointerValue];
 
-                return;
+                const struct LHFunctionHook hooks[1] = {
+                    { symbolPtr, (void *)hook, (void **)old },
+                };
+                
+                if(libundirect_batchHookEnabled)
+                {
+                    HBLogDebugWeak(@"received hook for %@ which is a direct method, batching hook...", selectorString);
+                    NSValue* batchedHookValue = [NSValue valueWithBytes:&hooks[0] objCType:@encode(struct LHFunctionHook)];
+                    [libundirect_batchedHooks addObject:batchedHookValue];
+                }
+                else
+                {
+                    HBLogDebugWeak(@"received hook for %@ which is a direct method, redirecting to HCHookFunction...", selectorString);
+                    HCHookFunctions(hooks, 1);
+                    return;
+                }
             }
         }
     }
@@ -357,6 +376,44 @@ libundirect_EXPORT NSArray* libundirect_failedSelectors()
     return [failedSelectors copy];
 }
 
+libundirect_EXPORT void libundirect_startBatchHooks(void)
+{
+    libundirect_batchHookEnabled = YES;
+    libundirect_batchedHooks = [NSMutableArray new];
+}
+
+libundirect_EXPORT void libundirect_applyBatchHooksAndAdditional(const struct LHFunctionHook* additionalHooks, NSUInteger additionalCount)
+{
+    NSUInteger fullCount = additionalCount + libundirect_batchedHooks.count;
+
+    if(fullCount)
+    {
+        struct LHFunctionHook* hooks = malloc(sizeof(struct LHFunctionHook) * fullCount);
+
+        [libundirect_batchedHooks enumerateObjectsUsingBlock:^(NSValue* batchedHookValue, NSUInteger idx, BOOL* stop)
+        {
+            [batchedHookValue getValue:&hooks[idx]];
+        }];
+
+        for(NSUInteger i = 0; i < additionalCount; i++)
+        {
+            memcpy(&hooks[libundirect_batchedHooks.count+i], &additionalHooks[i], sizeof(struct LHFunctionHook));
+        }
+
+        HCHookFunctions(hooks, fullCount);
+
+        free(hooks);
+    }
+
+    libundirect_batchHookEnabled = NO;
+    libundirect_batchedHooks = [NSMutableArray new];
+}
+
+libundirect_EXPORT void libundirect_applyBatchHooks(void)
+{
+    libundirect_applyBatchHooksAndAdditional(NULL, 0);
+}
+
 #else
 
 // Non 64 bit devices are so ancient that they probably don't need to use this library
@@ -375,5 +432,11 @@ libundirect_EXPORT NSArray* libundirect_failedSelectors()
 {
     return nil;
 }
+
+libundirect_EXPORT void libundirect_startBatchHooks(void) { }
+
+libundirect_EXPORT void libundirect_applyBatchHooksAndAdditional(const struct LHFunctionHook* additionalHooks, NSUInteger additionalCount) { }
+
+libundirect_EXPORT void libundirect_applyBatchHooks(void) { }
 
 #endif
