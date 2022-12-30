@@ -60,22 +60,25 @@ libundirect_EXPORT void libundirect_MSHookMessageEx(Class _class, SEL message, I
             NSValue* symbol = [undirectedSelectorsAndValues objectForKey:selectorString];
             if(symbol)
             {
-                 void* symbolPtr = [symbol pointerValue];
+                void* symbolPtr = [symbol pointerValue];
 
-                const struct LHFunctionHook hooks[1] = {
-                    { symbolPtr, (void *)hook, (void **)old },
-                };
-                
+                struct LHFunctionHook* hooks = malloc(sizeof(struct LHFunctionHook) * 1);
+                hooks[0].function = symbolPtr;
+                hooks[0].replacement = hook;
+                hooks[0].oldptr = old;
+
                 if(libundirect_batchHookEnabled)
                 {
                     HBLogDebugWeak(@"received hook for %@ which is a direct method, batching hook...", selectorString);
                     NSValue* batchedHookValue = [NSValue valueWithBytes:&hooks[0] objCType:@encode(struct LHFunctionHook)];
                     [libundirect_batchedHooks addObject:batchedHookValue];
+                    free(hooks);
                 }
                 else
                 {
                     HBLogDebugWeak(@"received hook for %@ which is a direct method, redirecting to HCHookFunction...", selectorString);
                     HCHookFunctions(hooks, 1);
+                    free(hooks);
                     return;
                 }
             }
