@@ -62,20 +62,19 @@ libundirect_EXPORT void libundirect_MSHookMessageEx(Class _class, SEL message, I
             {
                 void* symbolPtr = [symbol pointerValue];
 
-                static struct LHFunctionHook lhHook;
-                lhHook = (struct LHFunctionHook){ symbolPtr, (void *)hook, (void **)old };
-
                 if(libundirect_batchHookEnabled)
                 {
                     HBLogDebugWeak(@"received hook for %@ which is a direct method, batching hook...", selectorString);
+                    static struct LHFunctionHook lhHook;
+                    lhHook = (struct LHFunctionHook){ symbolPtr, (void *)hook, (void **)old };
                     NSValue* batchedHookValue = [NSValue valueWithBytes:&lhHook objCType:@encode(struct LHFunctionHook)];
                     [libundirect_batchedHooks addObject:batchedHookValue];
                     return;
                 }
                 else
                 {
-                    HBLogDebugWeak(@"received hook for %@ which is a direct method, redirecting to HCHookFunction...", selectorString);
-                    HCHookFunctions(&lhHook, 1);
+                    HBLogDebugWeak(@"received hook for %@ which is a direct method, hooking...", selectorString);
+                    MSHookFunction(symbolPtr, (void *)hook, (void **)old);
                     return;
                 }
             }
