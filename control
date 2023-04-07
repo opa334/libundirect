@@ -1,6 +1,6 @@
 Package: com.opa334.libundirect
 Name: libundirect
-Version: 1.1.4-3
+Version: 1.1.5
 Architecture: iphoneos-arm
 Description: Patchfinder and rebinder for objc_direct methods
 Maintainer: opa334

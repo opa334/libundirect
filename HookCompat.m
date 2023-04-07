@@ -1,9 +1,8 @@
-#include <substrate.h>
-#import <CoreFoundation/CoreFoundation.h>
 #import <Foundation/Foundation.h>
 #include <dlfcn.h>
-#import "HookCompat.h"
 #import "rootless.h"
+#include <substrate.h>
+#import "HookCompat.h"
 
 int (*__LHHookFunctions)(const struct LHFunctionHook *hooks, int count);
 
@@ -11,7 +10,7 @@ int HCHookFunctions(const struct LHFunctionHook *hooks, int count)
 {
 	static dispatch_once_t onceToken;
 	dispatch_once (&onceToken, ^{
-		const char* lhPath = ROOT_PATH_C("/usr/lib/libhooker.dylib");
+		const char* lhPath = ROOT_PATH("/usr/lib/libhooker.dylib");
 		if(access(lhPath, F_OK) == 0)
 		{
 			void* lhImage = dlopen(lhPath, RTLD_NOW);

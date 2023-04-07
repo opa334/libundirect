@@ -10,15 +10,15 @@
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
 
+#import <Foundation/Foundation.h>
+#import "libundirect.h"
 #import <mach-o/dyld.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
 #import <mach/mach.h>
 #import "pac.h"
-#import "HBLogWeak.h"
-#import <Foundation/Foundation.h>
 #import "HookCompat.h"
-#import "libundirect.h"
+#import "HBLogWeak.h"
 
 #define libundirect_EXPORT __attribute__((visibility ("default")))
 
@@ -70,6 +70,7 @@ libundirect_EXPORT void libundirect_MSHookMessageEx(Class _class, SEL message, I
                     HBLogDebugWeak(@"received hook for %@ which is a direct method, batching hook...", selectorString);
                     NSValue* batchedHookValue = [NSValue valueWithBytes:&lhHook objCType:@encode(struct LHFunctionHook)];
                     [libundirect_batchedHooks addObject:batchedHookValue];
+                    return;
                 }
                 else
                 {
@@ -361,7 +362,12 @@ libundirect_EXPORT void* libundirect_dsc_find(NSString* imageName, Class _class,
         image = MSGetImageByName(imagePath.UTF8String);
     }
 
-    return MSFindSymbol(image, symbol.UTF8String);
+    void *symbolPtr = MSFindSymbol(image, symbol.UTF8String);
+    /*HBLogDebugWeak(@"libundirect found pointer %p for symbol %@", symbolPtr, symbol);
+    Dl_info info;
+    dladdr(symbolPtr, &info);
+    HBLogDebugWeak(@"%p: %s + 0x%llX", symbolPtr, info.dli_fname, (uint64_t)symbolPtr - (uint64_t)info.dli_fbase);*/
+    return symbolPtr;
 }
 
 libundirect_EXPORT void libundirect_dsc_rebind(NSString* imageName, Class _class, SEL selector, const char* format)
