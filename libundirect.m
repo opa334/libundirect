@@ -11,7 +11,6 @@
 // copies or substantial portions of the Software.
 
 #import <Foundation/Foundation.h>
-#import "libundirect.h"
 #import <mach-o/dyld.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
@@ -19,6 +18,7 @@
 #import "pac.h"
 #import "HookCompat.h"
 #import "HBLogWeak.h"
+#import "libundirect.h"
 
 #define libundirect_EXPORT __attribute__((visibility ("default")))
 
