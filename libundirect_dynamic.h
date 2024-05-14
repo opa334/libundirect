@@ -68,7 +68,7 @@ static void* libundirect_seek_back(void* startPtr, unsigned char toByte, unsigne
 	static void* (*impl_libundirect_seek_back)(void*, unsigned char, unsigned int);
 	if(!impl_libundirect_seek_back)
 	{
-		void* handle = dlopen(, RTLD_LAZY);
+		void* handle = dlopen(LIBUNDIRECT_PATH, RTLD_LAZY);
 		impl_libundirect_seek_back = (void* (*)(void*, unsigned char, unsigned int))dlsym(handle, "libundirect_seek_back");
 	}
 	if(impl_libundirect_seek_back)
